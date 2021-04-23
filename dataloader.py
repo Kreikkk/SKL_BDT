@@ -1,0 +1,135 @@
+import uproot
+
+import numpy as np
+import pandas as pd
+
+from config import *
+
+
+def build_dataframe(tree):
+	dataframe = pd.DataFrame({"mJJ":			pd.Series(np.array(tree["mJJ"].array())),
+							  "deltaYJJ":		pd.Series(np.array(tree["deltaYJJ"].array())),
+							  "metPt":			pd.Series(np.array(tree["metPt"].array())),
+							  "ptBalance":		pd.Series(np.array(tree["ptBalance"].array())),
+							  "subleadJetEta":	pd.Series(np.array(tree["subleadJetEta"].array())),
+							  "leadJetPt":		pd.Series(np.array(tree["leadJetPt"].array())),
+							  "photonEta":		pd.Series(np.array(tree["photonEta"].array())),
+							  "ptBalanceRed":	pd.Series(np.array(tree["ptBalanceRed"].array())),
+							  "nJets":			pd.Series(np.array(tree["nJets"].array())),
+							  "sinDeltaPhiJJOver2": pd.Series(np.array(tree["sinDeltaPhiJJOver2"].array())),
+							  "deltaYJPh":		pd.Series(np.array(tree["deltaYJPh"].array())),
+							  "phCentrality":	pd.Series(np.array(tree["phCentrality"].array())),
+							  "weightModified":	pd.Series(np.array(tree["weightModified"].array())),
+							  "nLeptons":		pd.Series(np.array(tree["nLeptons"].array())),
+							 })
+
+	return dataframe
+
+
+def selection(dataframe, region="zgamma"):
+	dataframe = dataframe[dataframe["nJets"] > 1]
+	dataframe = dataframe[dataframe["nLeptons"] == 0]
+	if region == "signal":
+		dataframe = dataframe[dataframe["mJJ"] > 300]
+		dataframe = dataframe[dataframe["phCentrality"] < 0.6]
+
+	return dataframe
+
+
+def extract(backgrounds="all"):
+	SFile = uproot.open("source/"+SFILENAME)
+	STree = SFile[TREENAME]
+	SDataframe = build_dataframe(STree)
+
+	BDataframe = pd.DataFrame(columns=["mJJ", "deltaYJJ", "metPt", "ptBalance", "subleadJetEta",
+									   "leadJetPt", "photonEta", "ptBalanceRed", "nJets",
+									   "sinDeltaPhiJJOver2", "deltaYJPh", "phCentrality", 
+									   "weightModified", "nLeptons"])
+	if backgrounds == "all":
+		for filename in BFILENAMES:
+			BFile 	= uproot.open("source/"+filename)
+			BTree 	= BFile[TREENAME]
+			BDataframe = BDataframe.append(build_dataframe(BTree), ignore_index=True)
+	elif backgrounds == "train":
+		for filename in BTRAINFILENAMES:
+			BFile 	= uproot.open("source/"+filename)
+			BTree 	= BFile[TREENAME]
+			BDataframe = BDataframe.append(build_dataframe(BTree), ignore_index=True)
+	else:
+		raise KeyError
+
+	SDataframe = selection(SDataframe)
+	BDataframe = selection(BDataframe)
+
+	SDataframe["classID"] = 1.0
+	BDataframe["classID"] = 0.0
+
+	return SDataframe, BDataframe
+
+
+def build_output_dataframe(tree):
+	dataframe = pd.DataFrame({"mJJ":			pd.Series(np.array(tree["mJJ"].array())),
+							  "deltaYJJ":		pd.Series(np.array(tree["deltaYJJ"].array())),
+							  "metPt":			pd.Series(np.array(tree["metPt"].array())),
+							  "ptBalance":		pd.Series(np.array(tree["ptBalance"].array())),
+							  "subleadJetEta":	pd.Series(np.array(tree["subleadJetEta"].array())),
+							  "leadJetPt":		pd.Series(np.array(tree["leadJetPt"].array())),
+							  "photonEta":		pd.Series(np.array(tree["photonEta"].array())),
+							  "ptBalanceRed":	pd.Series(np.array(tree["ptBalanceRed"].array())),
+							  "nJets":			pd.Series(np.array(tree["nJets"].array())),
+							  "sinDeltaPhiJJOver2": pd.Series(np.array(tree["sinDeltaPhiJJOver2"].array())),
+							  "deltaYJPh":		pd.Series(np.array(tree["deltaYJPh"].array())),
+							  "weightModified":	pd.Series(np.array(tree["weightModified"].array())),
+							  "classID":		pd.Series(np.array(tree["classID"].array())),
+							 })
+	return dataframe
+
+
+def extract_from_output(output_type="test"):
+	file 		= uproot.open("output.root")
+	directory 	= file["dataloader"]
+	if output_type == "test":
+		Tree 		= directory["TestTree"]
+		Dataframe 	= build_output_dataframe(Tree)
+		SDataframe 	= Dataframe[Dataframe["classID"] == 0]
+		BDataframe 	= Dataframe[Dataframe["classID"] == 1]
+
+		BDataframe = BDataframe[BDataframe["weightModified"] < 2.5]
+
+		return SDataframe, BDataframe
+
+	elif output_type == "train":
+		Tree 		= directory["TrainTree"]
+		Dataframe 	= build_output_dataframe(Tree)
+		SDataframe 	= Dataframe[Dataframe["classID"] == 0]
+		BDataframe 	= Dataframe[Dataframe["classID"] == 1]
+
+		return SDataframe, BDataframe
+
+	else:
+		raise Exception("Wrong output type")
+
+
+def dataset_gen(backgrounds, ratio=0.5, region="zgamma"):
+	SDataframe, BDataframe = extract(backgrounds)
+	SDataframe, BDataframe = selection(SDataframe, region), selection(BDataframe, region)
+
+	SDataframe = SDataframe.sample(frac=1, random_state=1).reset_index(drop=True)
+	BDataframe = BDataframe.sample(frac=1, random_state=1).reset_index(drop=True)
+
+	STrainLen, BTrainLen = round(ratio*len(SDataframe)), round(ratio*len(BDataframe))
+
+	STrainDF = SDataframe.iloc[:STrainLen]
+	BTrainDF = BDataframe.iloc[:BTrainLen]
+
+	STestDF = SDataframe.iloc[STrainLen:]
+	BTestDF = BDataframe.iloc[BTrainLen:]
+
+	TrainDF	= pd.concat((STrainDF, BTrainDF), ignore_index=True).sample(frac=1, random_state=1).reset_index(drop=True)
+	TestDF	= pd.concat((STestDF, BTestDF), ignore_index=True).sample(frac=1, random_state=1).reset_index(drop=True)
+
+	return TrainDF, TestDF
+
+
+if __name__ == "__main__":
+	pass

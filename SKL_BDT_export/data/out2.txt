@@ -1,0 +1,4 @@
+sig_max:3.268
+optimal_cut:0.709
+sig_err:0.054
+roc_area:0.815

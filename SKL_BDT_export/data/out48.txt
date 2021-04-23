@@ -1,0 +1,4 @@
+sig_max:nan
+optimal_cut:11.247
+sig_err:nan
+roc_area:0.834

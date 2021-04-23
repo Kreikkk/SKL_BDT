@@ -1,0 +1,6 @@
+SChi:45.789
+BChi:9.13
+SChi_over_ndof:2.862
+BChi_over_ndof:0.609
+SPval:0.0
+BPval:0.871
