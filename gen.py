@@ -30,7 +30,7 @@ def train(TrainDF, params, filename="output"):
 
 
 if __name__ == "__main__":
-	filename = argv[1] + "zzz"
+	filename = argv[1]
 	params = argv[2:]
 	TrainDF, TestDF = dataset_gen(backgrounds="train")
 
